@@ -65,6 +65,7 @@ input[type=text]{font:inherit;color:#1d1d1b;background:transparent;border:0;bord
   padding:2px 2px 1px;outline:none;min-width:0;height:20px}
 input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
 .cups{margin-top:6px}
+.sr-submit{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 .row.sub .lbl{padding-left:12px;color:#55524b}
 
 /* Mobile: fluid single-column form. The export always renders the fixed A4 layout above. */
@@ -106,11 +107,14 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
 <div class="stage">
   <div id="sheet">
     <h1>Bestandsliste</h1>
+    <form id="entry" autocomplete="off" novalidate>
     <div class="meta">
       <div class="date"><label for="date">Datum:</label><input type="text" id="date" autocomplete="off"></div>
       <div class="days"><label>Tag:</label><span id="days" style="display:flex;gap:14px"></span></div>
     </div>
     <div class="cols" id="cols"></div>
+    <button type="submit" class="sr-submit" tabindex="-1" aria-hidden="true">Weiter</button>
+    </form>
   </div>
 </div>
 
@@ -224,13 +228,31 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
   allInputs.forEach(function(inp, i){
     inp.setAttribute("enterkeyhint", i === allInputs.length - 1 ? "done" : "next");
   });
-  document.getElementById("sheet").addEventListener("keydown", function(e){
-    if (e.key !== "Enter" || e.isComposing) return;
-    var i = allInputs.indexOf(e.target);
+  var lastAdvance = 0;
+  function advance(from){
+    var i = allInputs.indexOf(from);
     if (i < 0) return;
+    var now = Date.now();
+    if (now - lastAdvance < 350) return;   // one Enter press can fire several events on phones
+    lastAdvance = now;
+    if (i < allInputs.length - 1) {
+      var n = allInputs[i + 1];
+      n.focus();
+      try { n.select(); } catch(err){}
+    } else { from.blur(); }
+  }
+  var sheetEl = document.getElementById("sheet");
+  sheetEl.addEventListener("keydown", function(e){
+    if (e.isComposing && e.keyCode === 229 && e.key !== "Enter") return;
+    if (e.key === "Enter" || e.keyCode === 13 || e.which === 13) { e.preventDefault(); advance(e.target); }
+  });
+  // Some phone keyboards do not send a normal Enter key, only a line-break input or a form submit.
+  sheetEl.addEventListener("beforeinput", function(e){
+    if (e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") { e.preventDefault(); advance(e.target); }
+  });
+  document.getElementById("entry").addEventListener("submit", function(e){
     e.preventDefault();
-    if (i < allInputs.length - 1) { allInputs[i + 1].focus(); allInputs[i + 1].select(); }
-    else e.target.blur();
+    advance(document.activeElement);
   });
   dayHost.addEventListener("click", function(){ setTimeout(persist, 0); });
 
