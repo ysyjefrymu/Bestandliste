@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bestellliste</title>
+<title>Bestandsliste</title>
 <style>
 :root{
   box-sizing:border-box;
@@ -50,22 +50,22 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .box{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:1.5px solid #1d1d1b;border-radius:3px;
   font-size:13px;line-height:1;font-weight:700}
 
-.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:0 22px;align-items:start}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 22px;align-items:start}
+.col{min-width:0}
+.row{min-width:0}
 .col>section{margin-bottom:12px}
 section h2{margin:0 0 4px;padding:3px 7px;font-size:12px;letter-spacing:.6px;text-transform:uppercase;background:#2f5d50;color:#fff;border-radius:3px}
 .row{display:flex;align-items:flex-end;gap:6px;min-height:24px;padding:1px 0;font-size:12.5px}
-.row .lbl{flex:1 1 auto;line-height:1.15;padding-bottom:2px}
-.row .val{flex:0 0 62px}
+.row .lbl{flex:0 0 11.5em;line-height:1.15;padding-bottom:2px}
+.row .val{flex:1 1 0;min-width:0;width:0}
 .row.full{flex-direction:column;align-items:stretch;gap:0}
-.row.full .lbl{padding-bottom:0}
+.row.full .lbl{padding-bottom:0;flex:none}
 .row.full .val{flex:none;width:100%}
 input[type=text]{font:inherit;color:#1d1d1b;background:transparent;border:0;border-bottom:1px solid #8a867c;border-radius:0;
   padding:2px 2px 1px;outline:none;min-width:0;height:20px}
 input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
-.val-print{display:block;font:inherit;color:#1d1d1b;border-bottom:1px solid #8a867c;padding:2px 2px 1px;height:20px;line-height:16px;white-space:nowrap;overflow:hidden}
 .cups{margin-top:6px}
-.row.sub{padding-left:12px}
-.row.sub .lbl{color:#55524b}
+.row.sub .lbl{padding-left:12px;color:#55524b}
 
 /* Mobile: fluid single-column form. The export always renders the fixed A4 layout above. */
 @media (max-width: 820px){
@@ -82,11 +82,11 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
   #days{flex-wrap:wrap;gap:8px !important}
   .day{padding:8px 12px;border:1px solid #bdb8ac;border-radius:8px;font-size:16px;min-height:44px;gap:8px}
   .box{width:22px;height:22px;font-size:16px}
-  .cols{grid-template-columns:1fr;gap:0}
+  .cols{grid-template-columns:minmax(0,1fr);gap:0}
   section h2{font-size:13px;padding:6px 10px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 62px);z-index:2}
   .row{min-height:44px;gap:10px;font-size:16px;padding:2px 0}
-  .row .lbl{padding-bottom:6px;line-height:1.2}
-  .row .val{flex:0 0 112px}
+  .row .lbl{flex:0 0 11.8em;padding-bottom:6px;line-height:1.2}
+  .row .val{flex:1 1 0}
   .row.full .val{flex:none;width:100%}
   input[type=text]{height:36px;font-size:16px;padding:4px 4px 2px}
   .meta .date input{height:36px}
@@ -105,7 +105,7 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
 
 <div class="stage">
   <div id="sheet">
-    <h1>Bestellliste</h1>
+    <h1>Bestandsliste</h1>
     <div class="meta">
       <div class="date"><label for="date">Datum:</label><input type="text" id="date" autocomplete="off"></div>
       <div class="days"><label>Tag:</label><span id="days" style="display:flex;gap:14px"></span></div>
@@ -114,8 +114,6 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function(){
   var SECTIONS = {
@@ -265,28 +263,188 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
     }
   }
 
-  function renderCanvas(){
-    var sheet = document.getElementById("sheet");
-    return html2canvas(sheet, {
-      scale: 2, backgroundColor: "#ffffff", useCORS: false, logging: false,
-      windowWidth: 1200,
-      onclone: function(doc){
-        // Replace inputs by static text so values render crisply and aligned.
-        doc.querySelectorAll("#sheet input[type=text]").forEach(function(i){
-          var d = doc.createElement("div");
-          d.className = "val-print " + (i.className||"");
-          d.textContent = i.value;
-          if (i.id === "date") d.style.width = "120px";
-          i.parentNode.replaceChild(d, i);
-        });
-        // Keep each row's value box width as in the live view.
-        doc.querySelectorAll(".row:not(.full) .val-print").forEach(function(d){ d.style.flex = "0 0 62px"; });
-        doc.querySelectorAll(".row.full .val-print").forEach(function(d){ d.style.width = "100%"; });
-      }
-    });
+  // ---- Export without any library ----
+  // The sheet is drawn on a canvas (A4 proportions). JPG is saved directly from that canvas;
+  // PDF is a minimal one-page PDF file that contains the same picture.
+  var FONT = '"Helvetica Neue",Helvetica,Arial,sans-serif';
+
+  function rowOf(r){
+    return {
+      label: r.querySelector(".lbl").textContent,
+      value: r.querySelector("input").value,
+      full: r.classList.contains("full"),
+      sub: r.classList.contains("sub")
+    };
   }
 
-  function fileStem(){ return "Bestellliste_" + isoToday(); }
+  function readModel(){
+    var cols = [];
+    document.querySelectorAll("#cols > .col").forEach(function(col){
+      var blocks = [];
+      Array.prototype.forEach.call(col.children, function(node){
+        if (node.tagName === "SECTION") {
+          var sec = { title: node.querySelector("h2").textContent, rows: [] };
+          node.querySelectorAll(".row").forEach(function(r){ sec.rows.push(rowOf(r)); });
+          blocks.push(sec);
+        } else if (node.classList.contains("row")) {
+          var last = blocks[blocks.length - 1];
+          if (!last || last.title !== null) { last = { title: null, rows: [] }; blocks.push(last); }
+          last.rows.push(rowOf(node));
+        }
+      });
+      cols.push(blocks);
+    });
+    return cols;
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function fitText(ctx, text, maxW, size, weight){
+    var s = size;
+    ctx.font = (weight || "normal") + " " + s + "px " + FONT;
+    while (ctx.measureText(text).width > maxW && s > 7) {
+      s -= 0.5;
+      ctx.font = (weight || "normal") + " " + s + "px " + FONT;
+    }
+    while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
+    return text;
+  }
+
+  // Walks through one column. With ctx = null it only measures; otherwise it draws. Returns the bottom y.
+  function layoutColumn(ctx, blocks, x, y, colW, rh){
+    var k = rh / 24, fs = 12.5 * k, labelW = 11.5 * fs, hh = rh * 0.9;
+    blocks.forEach(function(b){
+      if (b.title !== null) {
+        if (ctx) {
+          ctx.fillStyle = "#2f5d50";
+          roundRect(ctx, x, y, colW, hh, 3); ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold " + (12 * k) + "px " + FONT;
+          ctx.textBaseline = "middle";
+          if ("letterSpacing" in ctx) ctx.letterSpacing = "0.6px";
+          ctx.fillText(b.title.toUpperCase(), x + 7, y + hh / 2 + 0.5);
+          if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+        }
+        y += hh + 4 * k;
+      }
+      b.rows.forEach(function(r){
+        var h = r.full ? rh * 1.6 : rh;
+        if (ctx) {
+          var lineY = y + h - 3 * k;
+          ctx.textBaseline = "alphabetic";
+          ctx.fillStyle = r.sub ? "#55524b" : "#1d1d1b";
+          ctx.font = fs + "px " + FONT;
+          var vx, vw;
+          if (r.full) {
+            ctx.fillText(r.label, x, y + fs + 1);
+            vx = x; vw = colW;
+          } else {
+            ctx.fillText(r.label, x + (r.sub ? 12 * k : 0), lineY - 4 * k);
+            vx = x + labelW + 6 * k; vw = colW - labelW - 6 * k;
+          }
+          ctx.fillStyle = "#8a867c";
+          ctx.fillRect(vx, lineY, vw, 1);
+          if (r.value) {
+            ctx.fillStyle = "#1d1d1b";
+            var t = fitText(ctx, r.value, vw - 4, fs, "normal");
+            ctx.fillText(t, vx + 2, lineY - 3 * k);
+          }
+        }
+        y += h;
+      });
+      y += 12 * k;
+    });
+    return y;
+  }
+
+  function drawSheet(){
+    var W = 794, H = 1123, S = 2, PADX = 36, GAP = 22, BOT = 26;
+    var canvas = document.createElement("canvas");
+    canvas.width = W * S; canvas.height = H * S;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(S, S);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = "#1d1d1b"; ctx.textBaseline = "alphabetic";
+    ctx.font = "bold 26px " + FONT;
+    ctx.fillText("Bestandsliste", PADX, 60);
+
+    // Date and weekday
+    var my = 88;
+    ctx.textBaseline = "middle";
+    ctx.font = "bold 14px " + FONT;
+    ctx.fillText("Datum:", PADX, my);
+    var dx = PADX + ctx.measureText("Datum:").width + 8;
+    ctx.fillStyle = "#8a867c"; ctx.fillRect(dx, my + 10, 120, 1);
+    ctx.fillStyle = "#1d1d1b";
+    ctx.font = "14px " + FONT;
+    ctx.fillText(fitText(ctx, dateInput.value, 116, 14, "normal"), dx + 2, my);
+    var tx = dx + 120 + 22;
+    ctx.font = "bold 14px " + FONT;
+    ctx.fillText("Tag:", tx, my);
+    var bx = tx + ctx.measureText("Tag:").width + 14;
+    DAYS.forEach(function(d){
+      ctx.strokeStyle = "#1d1d1b"; ctx.lineWidth = 1.5;
+      roundRect(ctx, bx + 0.75, my - 7.25, 14.5, 14.5, 3); ctx.stroke();
+      if (dayState[d]) {
+        ctx.font = "bold 13px " + FONT; ctx.textAlign = "center";
+        ctx.fillText("\u2713", bx + 8, my + 0.5); ctx.textAlign = "left";
+      }
+      ctx.font = "14px " + FONT;
+      ctx.fillText(d, bx + 21, my);
+      bx += 21 + ctx.measureText(d).width + 14;
+    });
+    ctx.fillStyle = "#1d1d1b"; ctx.fillRect(PADX, 110, W - 2 * PADX, 2);
+
+    // Three columns; row height shrinks if needed so everything stays on this one page
+    var cols = readModel();
+    var colW = (W - 2 * PADX - 2 * GAP) / 3;
+    var top = 126, avail = H - BOT - top, rh = 24;
+    while (rh > 14) {
+      var tallest = 0;
+      cols.forEach(function(c){ tallest = Math.max(tallest, layoutColumn(null, c, 0, 0, colW, rh)); });
+      if (tallest <= avail) break;
+      rh -= 0.5;
+    }
+    cols.forEach(function(c, i){ layoutColumn(ctx, c, PADX + i * (colW + GAP), top, colW, rh); });
+    return canvas;
+  }
+
+  // Minimal one-page A4 PDF that shows the JPEG picture full page.
+  function makePdf(jpeg, imgW, imgH){
+    var chunks = [], offsets = [], pos = 0;
+    function bytes(s){ var a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 255; return a; }
+    function push(x){ var b = typeof x === "string" ? bytes(x) : x; chunks.push(b); pos += b.length; }
+    function obj(n, body){ offsets[n] = pos; push(n + " 0 obj\n" + body + "\nendobj\n"); }
+    function pad10(n){ var s = String(n); while (s.length < 10) s = "0" + s; return s; }
+    var PW = 595.28, PH = 841.89;
+    push("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n");
+    obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+    obj(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+    obj(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + PW + " " + PH + "] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>");
+    offsets[4] = pos;
+    push("4 0 obj\n<< /Type /XObject /Subtype /Image /Width " + imgW + " /Height " + imgH +
+         " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpeg.length + " >>\nstream\n");
+    push(jpeg);
+    push("\nendstream\nendobj\n");
+    var content = "q " + PW + " 0 0 " + PH + " 0 0 cm /Im0 Do Q";
+    obj(5, "<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream");
+    var xrefPos = pos, xref = "xref\n0 6\n0000000000 65535 f \n";
+    for (var n = 1; n <= 5; n++) xref += pad10(offsets[n]) + " 00000 n \n";
+    push(xref + "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n" + xrefPos + "\n%%EOF\n");
+    return new Blob(chunks, { type: "application/pdf" });
+  }
+
+  function fileStem(){ return "Bestandsliste_" + isoToday(); }
 
   function canvasToBlob(canvas, type, q){
     return new Promise(function(res, rej){ canvas.toBlob(function(b){ b ? res(b) : rej(new Error("blob")); }, type, q); });
@@ -300,19 +458,15 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
     if (!downloads) { setStatus("Speichern ist hier nicht verfügbar."); return; }
     busy(true); setStatus("Wird erstellt …");
     try {
-      var canvas = await renderCanvas();
+      var canvas = drawSheet();
+      var jpegBlob = await canvasToBlob(canvas, "image/jpeg", 0.95);
       var data, name;
       if (kind === "jpg") {
-        data = await canvasToBlob(canvas, "image/jpeg", 0.95);
+        data = jpegBlob;
         name = fileStem() + ".jpg";
       } else {
-        var jsPDF = window.jspdf.jsPDF;
-        var pdf = new jsPDF({ unit:"mm", format:"a4", orientation:"portrait" });
-        var pw = 210, ph = 297;
-        var w = pw, h = pw * canvas.height / canvas.width;
-        if (h > ph) { h = ph; w = ph * canvas.width / canvas.height; }   // always exactly one page
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", (pw - w)/2, 0, w, h);
-        data = pdf.output("blob");
+        var bytes = new Uint8Array(await jpegBlob.arrayBuffer());
+        data = makePdf(bytes, canvas.width, canvas.height);
         name = fileStem() + ".pdf";
       }
       var r = await downloads.save({ filename: name, data: data });
