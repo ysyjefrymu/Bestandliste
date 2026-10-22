@@ -96,8 +96,8 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
 <body>
 
 <div class="toolbar">
-  <span class="hint">Ausfüllen, dann als PDF oder JPG speichern (1 Seite, A4).</span>
-  <button class="btn" id="reset" type="button">Zurücksetzen</button>
+  <span class="hint">Ausfüllen, dann als PDF oder JPG speichern (1 Seite, A4). Eingaben bleiben gespeichert.</span>
+  <button class="btn" id="reset" type="button">Formular leeren</button>
   <button class="btn" id="jpg" type="button">Als JPG speichern</button>
   <button class="btn primary" id="pdf" type="button">Als PDF speichern</button>
   <div class="status" id="status" role="status"></div>
@@ -189,11 +189,52 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
   }
   autoDay();
 
-  document.getElementById("reset").addEventListener("click", function(){
-    document.querySelectorAll("#sheet input[type=text]").forEach(function(i){ i.value=""; });
+  // ---- Remember the form between visits (stored in this browser only) ----
+  var KEY = "bestellliste_v1";
+  function fields(){
+    return Array.prototype.slice.call(document.querySelectorAll("#sheet input[type=text]")).filter(function(i){ return i.id !== "date"; });
+  }
+  function setDay(d, on){
+    Array.prototype.forEach.call(dayHost.children, function(b){ if (b._d === d && !!dayState[d] !== on) b.click(); });
+  }
+  function persist(){
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        items: fields().map(function(i){ return i.value; }),
+        date: dateInput.value, days: dayState, savedOn: isoToday()
+      }));
+    } catch(e){}
+  }
+  function restore(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var s = JSON.parse(raw), f = fields();
+      (s.items || []).forEach(function(v, i){ if (f[i]) f[i].value = v || ""; });
+      // Date and weekday stay "today" on a new day; the entered amounts are kept until you clear the form.
+      if (s.savedOn === isoToday()) {
+        if (s.date) dateInput.value = s.date;
+        DAYS.forEach(function(d){ setDay(d, !!(s.days && s.days[d])); });
+      }
+    } catch(e){}
+  }
+  restore();
+  document.getElementById("sheet").addEventListener("input", persist);
+  dayHost.addEventListener("click", function(){ setTimeout(persist, 0); });
+
+  var resetBtn = document.getElementById("reset"), resetTimer = null;
+  resetBtn.addEventListener("click", function(){
+    if (!resetTimer) {
+      resetBtn.textContent = "Wirklich leeren?";
+      resetTimer = setTimeout(function(){ resetTimer = null; resetBtn.textContent = "Formular leeren"; }, 3500);
+      return;
+    }
+    clearTimeout(resetTimer); resetTimer = null; resetBtn.textContent = "Formular leeren";
+    fields().forEach(function(i){ i.value = ""; });
     dateInput.value = today();
     Array.prototype.forEach.call(dayHost.children, function(b){ dayState[b._d]=false; b._box.textContent=""; b.setAttribute("aria-pressed","false"); });
     autoDay();
+    persist();
     setStatus("");
   });
 
@@ -202,11 +243,21 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
 
   var downloads = null;
   var dlReady = false;
+  // Outside Claude (e.g. GitHub Pages) there is no downloads capability, so fall back to a normal browser download.
+  var fallbackDownloads = {
+    save: function(o){
+      var a = document.createElement("a");
+      var u = URL.createObjectURL(o.data);
+      a.href = u; a.download = o.filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(u); }, 4000);
+      return Promise.resolve({ status: "saved" });
+    }
+  };
   try {
     if (window.claude && window.claude.use) {
-      window.claude.use("downloads").then(function(d){ downloads = d; dlReady = true; refreshButtons(); }, function(){ dlReady = true; refreshButtons(); });
-    } else { dlReady = true; }
-  } catch(e){ dlReady = true; }
+      window.claude.use("downloads").then(function(d){ downloads = d; dlReady = true; refreshButtons(); }, function(){ downloads = fallbackDownloads; dlReady = true; refreshButtons(); });
+    } else { downloads = fallbackDownloads; dlReady = true; }
+  } catch(e){ downloads = fallbackDownloads; dlReady = true; }
 
   function refreshButtons(){
     if (dlReady && !downloads) {
