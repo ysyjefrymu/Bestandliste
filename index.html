@@ -218,6 +218,20 @@ input[type=text]:focus{border-bottom-color:#2f5d50;background:#f3f8f6}
   }
   restore();
   document.getElementById("sheet").addEventListener("input", persist);
+
+  // Enter jumps to the next field (in page order); on the last field it closes the keyboard.
+  var allInputs = Array.prototype.slice.call(document.querySelectorAll("#sheet input[type=text]"));
+  allInputs.forEach(function(inp, i){
+    inp.setAttribute("enterkeyhint", i === allInputs.length - 1 ? "done" : "next");
+  });
+  document.getElementById("sheet").addEventListener("keydown", function(e){
+    if (e.key !== "Enter" || e.isComposing) return;
+    var i = allInputs.indexOf(e.target);
+    if (i < 0) return;
+    e.preventDefault();
+    if (i < allInputs.length - 1) { allInputs[i + 1].focus(); allInputs[i + 1].select(); }
+    else e.target.blur();
+  });
   dayHost.addEventListener("click", function(){ setTimeout(persist, 0); });
 
   var resetBtn = document.getElementById("reset"), resetTimer = null;
